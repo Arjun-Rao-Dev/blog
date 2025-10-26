@@ -1,0 +1,7 @@
+baseURL = "http://example.org/"
+languageCode = "en-us"
+title = "Hello Hugo"
+theme = ""
+disableKinds = ["taxonomy", "term"]
+[params]
+  author = "Hugo User"

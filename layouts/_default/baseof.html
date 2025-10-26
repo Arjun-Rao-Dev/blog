@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ block "title" . }}{{ .Site.Title }}{{ end }}</title>
+    <link rel="stylesheet" href="{{ "css/site.css" | relURL }}" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="container">
+        <h1><a href="{{ "/" | relURL }}">{{ .Site.Title }}</a></h1>
+        {{ with .Site.Params.author }}<p class="subtitle">A simple Hugo starter by {{ . }}</p>{{ end }}
+      </div>
+    </header>
+    <main class="container">
+      {{ block "main" . }}{{ end }}
+    </main>
+    <footer class="site-footer">
+      <div class="container">
+        <p>&copy; {{ now.Format "2006" }} {{ .Site.Params.author }}. Built with <a href="https://gohugo.io/">Hugo</a>.</p>
+      </div>
+    </footer>
+  </body>
+</html>
