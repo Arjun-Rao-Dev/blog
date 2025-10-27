@@ -1,0 +1,103 @@
+:root {
+  color-scheme: light dark;
+  --bg-color: #f8f9fa;
+  --text-color: #212529;
+  --accent-color: #0d6efd;
+  --muted-color: #6c757d;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-color: #0f172a;
+    --text-color: #e2e8f0;
+    --accent-color: #38bdf8;
+    --muted-color: #94a3b8;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: var(--bg-color);
+  color: var(--text-color);
+  line-height: 1.6;
+}
+
+.container {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+}
+
+.site-header,
+.site-footer {
+  background: rgba(0, 0, 0, 0.04);
+  padding: 2rem 0;
+}
+
+.site-header h1 {
+  margin: 0;
+  font-size: 2rem;
+}
+
+.site-header a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.subtitle {
+  margin-top: 0.5rem;
+  color: var(--muted-color);
+}
+
+main {
+  padding: 3rem 0;
+}
+
+h1,
+h2,
+h3 {
+  color: var(--text-color);
+  line-height: 1.25;
+}
+
+.meta {
+  color: var(--muted-color);
+  font-size: 0.9rem;
+}
+
+.content p {
+  margin-bottom: 1rem;
+}
+
+.post-list {
+  list-style: none;
+  padding: 0;
+}
+
+.post-list li {
+  margin-bottom: 1.5rem;
+}
+
+.post-list a {
+  color: var(--accent-color);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.post-list a:hover,
+.post-list a:focus {
+  text-decoration: underline;
+}
+
+code {
+  background: rgba(0, 0, 0, 0.08);
+  padding: 0.15rem 0.4rem;
+  border-radius: 0.25rem;
+  font-family: "Fira Code", "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.95em;
+}
