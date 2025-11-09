@@ -1,8 +1,0 @@
-baseURL = "http://example.org/"
-languageCode = "en-us"
-title = "Hello Hugo"
-disableKinds = ["taxonomy", "term"]
-theme = "coder"
-[params.author]
-  name = "Hugo User"
-  image = ""
