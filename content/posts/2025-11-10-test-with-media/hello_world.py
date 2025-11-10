@@ -1,0 +1,7 @@
+print("Hello World")
+print("This is a simple Python script.")
+print("It prints a greeting message to the console.")
+print("another one")
+print("and another one")
+print("final one")
+print("final final one")

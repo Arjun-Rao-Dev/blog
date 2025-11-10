@@ -1,0 +1,186 @@
+name: Create Hugo Blog Post
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '.github/**'
+
+jobs:
+  create-blog-post:
+    # Use the `production` environment so secrets defined in that environment
+    # (for example `BLOG_REPO_TOKEN`) will be available to this job.
+    environment: production
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout learning repo
+        uses: actions/checkout@v3
+        with:
+          path: learning
+
+      - name: Check required secrets and environment variables
+        env:
+          BLOG_REPO_TOKEN: ${{ secrets.BLOG_REPO_TOKEN }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          DEEPSEEK_URL: https://your-deepseek-api-url
+        run: |
+          set -euo pipefail
+          missing=false
+          # Check required secrets
+          for v in BLOG_REPO_TOKEN DEEPSEEK_API_KEY; do
+            if [ -z "${!v:-}" ]; then
+              echo "::error::Missing required secret $v in the production environment"
+              missing=true
+            fi
+          done
+          # Check required environment variable
+          if [ -z "${DEEPSEEK_URL:-}" ]; then
+            echo "::error::Missing required environment variable DEEPSEEK_URL"
+            missing=true
+          fi
+          if [ "$missing" = true ]; then
+            echo "One or more required secrets or environment variables are missing."
+            echo "Please add BLOG_REPO_TOKEN and DEEPSEEK_API_KEY to the 'production' environment in repository settings, and ensure DEEPSEEK_URL is set as an environment variable in the runner."
+            exit 1
+          fi
+
+      - name: Checkout blog repo
+        uses: actions/checkout@v3
+        with:
+          repository: Arjun-Rao-Dev/blog
+          token: ${{ secrets.BLOG_REPO_TOKEN }}
+          path: blog
+
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v39
+        with:
+          path: learning
+
+      - name: Set up Hugo
+        uses: peaceiris/actions-hugo@v2
+        with:
+          hugo-version: 'latest'
+          extended: true
+
+      - name: Create blog post
+        env:
+          # Map Deepseek variables from environment-level secrets (production environment)
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          # DEEPSEEK_URL is now expected to be set in the runner environment, not as a secret
+        run: |
+          set -euo pipefail
+          cd blog
+
+          # Ensure content/posts exists
+          mkdir -p content/posts
+
+          for file in ${{ steps.changed-files.outputs.all_changed_files }}; do
+            src_path="../learning/$file"
+
+            # Determine the directory we should copy into the post bundle.
+            if [ -d "$src_path" ]; then
+              base_dir="$file"
+            else
+              base_dir=$(dirname "$file")
+              # If file is at repo root, use filename (without extension) as base_dir
+              if [ "$base_dir" = "." ]; then
+                base_dir=$(basename "$file" | sed 's/\.[^.]*$//')
+              fi
+            fi
+
+            # Normalize POST_NAME from base_dir
+            POST_NAME=$(echo "$base_dir" | tr '/' '-' | sed 's/\.[^.]*$//')
+            DATE=$(date +%Y-%m-%d)
+            POST_DIR="content/posts/$DATE-$POST_NAME"
+            mkdir -p "$POST_DIR"
+
+            # Copy relevant files into the page bundle. This will include images, gifs and code files.
+            SRC_DIR="../learning/$base_dir"
+            if [ -d "$SRC_DIR" ]; then
+              # Copy everything from the source directory into the bundle (excluding .git)
+              rsync -av --exclude='.git' "$SRC_DIR/" "$POST_DIR/" || true
+            else
+              # If there's no directory, try copying the single file
+              if [ -f "../learning/$file" ]; then
+                cp "../learning/$file" "$POST_DIR/"
+              fi
+            fi
+
+            # Find a primary file to summarize (prefer README, md, or code files)
+            main_candidate=""
+            if [ -f "$POST_DIR/README.md" ]; then
+              main_candidate="$POST_DIR/README.md"
+            else
+              main_candidate=$(find "$POST_DIR" -type f \( -iname "*.md" -o -iname "README*" -o -iname "*.py" -o -iname "*.js" -o -iname "*.go" -o -iname "*.java" \) | head -n 1 || true)
+            fi
+
+            # Generate summary using Deepseek if credentials and candidate exist
+            SUMMARY=""
+            if [ -n "${DEEPSEEK_API_KEY:-}" ] && [ -n "${DEEPSEEK_URL:-}" ] && [ -n "$main_candidate" ]; then
+              # Build a proper JSON payload using python to ensure escaping
+              JSON_PAYLOAD=$(python3 -c "import json,sys;print(json.dumps({'text':open(sys.argv[1]).read()}))" "$main_candidate")
+
+              SUMMARY=$(curl -s -X POST "$DEEPSEEK_URL" \
+                -H "Authorization: Bearer $DEEPSEEK_API_KEY" \
+                -H "Content-Type: application/json" \
+                -d "$JSON_PAYLOAD" \
+                | python3 -c 'import sys,json;print(json.load(sys.stdin).get("summary",""))' || true)
+
+              # Truncate summary to 10000 chars to keep front matter/body manageable
+              SUMMARY=$(echo "$SUMMARY" | awk '{s=substr($0,1,10000);print s}')
+            fi
+
+            # Compose index.md inside the page bundle
+            INDEX_FILE="$POST_DIR/index.md"
+            TITLE="Post from $POST_NAME"
+            if [ -n "$SUMMARY" ]; then
+              echo "---" > "$INDEX_FILE"
+              echo "title: \"$TITLE\"" >> "$INDEX_FILE"
+              echo "date: $(date +"%Y-%m-%dT%H:%M:%S%:z")" >> "$INDEX_FILE"
+              echo "draft: false" >> "$INDEX_FILE"
+              echo "---" >> "$INDEX_FILE"
+              echo "" >> "$INDEX_FILE"
+              echo "$SUMMARY" >> "$INDEX_FILE"
+              echo "" >> "$INDEX_FILE"
+            else
+              # Minimal front matter if no summary
+              echo "---" > "$INDEX_FILE"
+              echo "title: \"$TITLE\"" >> "$INDEX_FILE"
+              echo "date: $(date +"%Y-%m-%dT%H:%M:%S%:z")" >> "$INDEX_FILE"
+              echo "draft: false" >> "$INDEX_FILE"
+              echo "---" >> "$INDEX_FILE"
+              echo "" >> "$INDEX_FILE"
+              echo "This post was automatically generated from $file in the learning repository." >> "$INDEX_FILE"
+              echo "" >> "$INDEX_FILE"
+            fi
+
+            # Append code blocks for code files found in the bundle (inline for quick reading)
+            find "$POST_DIR" -maxdepth 1 -type f \( -iname "*.py" -o -iname "*.js" -o -iname "*.go" -o -iname "*.java" -o -iname "*.sh" \) | while read -r codefile; do
+              fname=$(basename "$codefile")
+              ext=${fname##*.}
+              echo "### $fname" >> "$INDEX_FILE"
+              echo '```'"$ext" >> "$INDEX_FILE"
+              sed 's/^/    /' "$codefile" >> "$INDEX_FILE"
+              echo '```' >> "$INDEX_FILE"
+              echo "" >> "$INDEX_FILE"
+            done
+
+            # If there are image files, reference them in the post (Hugo page bundle will serve them)
+            find "$POST_DIR" -maxdepth 1 -type f \( -iname "*.png" -o -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.gif" -o -iname "*.webp" \) | while read -r img; do
+              iname=$(basename "$img")
+              echo "![${iname}](${iname})" >> "$INDEX_FILE"
+              echo "" >> "$INDEX_FILE"
+            done
+
+          done
+
+      - name: Commit and push changes
+        run: |
+          cd blog
+          git config --global user.name 'GitHub Actions'
+          git config --global user.email 'actions@github.com'
+          git add .
+          git commit -m "Add blog post for changes in learning repo" || echo "No changes to commit"
+          git push
